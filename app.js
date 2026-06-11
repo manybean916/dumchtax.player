@@ -26,6 +26,7 @@ const state = {
   playerReady: false,
   library: loadLibrary(),
   savedCurrent: false,
+  currentCardId: null,  // id of the library card currently loaded in player
 };
 
 function loadLibrary() {
@@ -291,23 +292,31 @@ async function analyzePhoto(dataUrl) {
     contents: [{
       parts: [
         { text:
-`Analyze this photo's visual mood for music matching.
+`Analyze this photo's visual mood and recommend a real song.
 Respond with ONLY a JSON object, no markdown fences:
 {
  "mood": "<short mood phrase in English>",
  "keywords": ["<3-5 english mood keywords>"],
  "caption": "<poetic 2-4 word title for this photo>",
- "musicQuery": "<a YouTube search query for a song/playlist that matches this mood, in English>"
+ "musicQuery": "<YouTube search query for ONE specific real song with lyrics matching this mood — must be a K-pop, Korean indie/ballad, or well-known Western pop song. Format: 'Artist SongTitle'. Do NOT suggest lofi, ambient, instrumental, or radio streams.>"
 }` },
         { inline_data: { mime_type: "image/jpeg", data: base64 } },
       ],
     }],
   };
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(settings.geminiKey)}`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
-  );
-  if (!res.ok) throw new Error("Gemini API " + res.status);
+  // try models in order — 2.0-flash first, fall back to 1.5-flash
+  const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+  let res, lastStatus;
+  for (const model of models) {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(settings.geminiKey)}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+    );
+    lastStatus = res.status;
+    if (res.ok) break;
+    if (res.status === 429) throw new Error("Gemini API 429"); // rate-limit — don't try next model
+  }
+  if (!res.ok) throw new Error("Gemini API " + lastStatus);
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   const json = text.replace(/```json|```/g, "").trim();
@@ -318,11 +327,11 @@ Respond with ONLY a JSON object, no markdown fences:
 
 function fallbackAnalysis() {
   const h = new Date().getHours();
-  if (h < 6)  return { mood: "midnight calm", keywords: ["night","quiet","dream"], caption: "Midnight Drift", musicQuery: "calm midnight ambient music" };
-  if (h < 11) return { mood: "fresh morning", keywords: ["morning","light","fresh"], caption: "Morning Light", musicQuery: "fresh morning acoustic music" };
-  if (h < 17) return { mood: "lazy afternoon", keywords: ["warm","mellow","sunny"], caption: "Sun-Drenched", musicQuery: "mellow afternoon lofi music" };
-  if (h < 21) return { mood: "golden hour", keywords: ["sunset","golden","nostalgic"], caption: "Golden Hour", musicQuery: "golden hour chill sunset music" };
-  return { mood: "city night", keywords: ["neon","night","urban"], caption: "Neon Pulse", musicQuery: "late night city jazz music" };
+  if (h < 6)  return { mood: "midnight calm", keywords: ["night","quiet","dream"], caption: "Midnight Drift", musicQuery: "IU 밤편지" };
+  if (h < 11) return { mood: "fresh morning", keywords: ["morning","light","fresh"], caption: "Morning Light", musicQuery: "볼빨간사춘기 썸 탈꺼야" };
+  if (h < 17) return { mood: "lazy afternoon", keywords: ["warm","mellow","sunny"], caption: "Sun-Drenched", musicQuery: "offonoff 하루살이" };
+  if (h < 21) return { mood: "golden hour", keywords: ["sunset","golden","nostalgic"], caption: "Golden Hour", musicQuery: "혁오 위잉위잉" };
+  return { mood: "city night", keywords: ["neon","night","urban"], caption: "Neon Pulse", musicQuery: "빈지노 어린 날에" };
 }
 
 /* ---------------- YouTube search ---------------- */
@@ -408,13 +417,13 @@ window.onYouTubeIframeAPIReady = function () {
 };
 
 function loadVideo(id) {
-  $("#yt-circle").classList.add("visible");
   ytPlayer.loadVideoById(id);
 }
 
 function playTrack(track) {
   if (!track) return;
   state.savedCurrent = false;
+  state.currentCardId = null;
   $("#save-btn").classList.remove("saved");
   updatePlayerPolaroid();
   if (state.playerReady) loadVideo(track.id);
@@ -423,16 +432,38 @@ function playTrack(track) {
 
 function currentTrack() { return state.results[state.trackIndex] || null; }
 
+function cleanToken(raw) {
+  return raw
+    .replace(/\s*[\(\[【][^\)\]】]*[\)\]】]/g, '')
+    .replace(/\s*[|｜].*/g, '')
+    .replace(/(\s+(M\/V|MV|Official|Audio|Video|Lyrics?|Live))+$/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 28);
+}
+
+function parseTrackCaption(title, channelTitle) {
+  // 영상 제목에서 "Artist - Song" 패턴 추출
+  const match = title.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  if (match) {
+    const artist = cleanToken(match[1]);
+    const song   = cleanToken(match[2]);
+    if (artist && song) return `${artist} — ${song}`;
+  }
+  // 구분자 없으면 제목만 (채널명은 배급사일 수 있음)
+  return cleanToken(title);
+}
+
 function updatePlayerPolaroid() {
   const t = currentTrack();
   const cap = $("#player-caption");
   if (state.photo) {
     $("#player-photo").src = state.photo;
     $("#player-photo").style.display = "block";
+    $("#lp-thumb").src = state.photo;
   }
   if (t) {
-    const title = t.title.length > 46 ? t.title.slice(0, 44) + "…" : t.title;
-    cap.textContent = `${t.artist} - ${title}`;
+    cap.textContent = parseTrackCaption(t.title, t.artist);
   } else {
     cap.textContent = state.analysis ? state.analysis.caption : "No music yet";
   }
@@ -488,7 +519,36 @@ volKnob.addEventListener("pointerdown", (e) => {
 $("#save-btn").addEventListener("click", () => {
   const t = currentTrack();
   if (!t || !state.photo) return toast("저장할 추억이 아직 없어요!");
-  if (state.savedCurrent) return toast("이미 라이브러리에 저장된 추억이에요.");
+
+  if (state.savedCurrent) {
+    // ── UNSAVE : remove from library ──
+    const removeId = state.currentCardId
+      || state.library.find(c => c.track.youtubeId === t.id && c.imageUri === state.photo)?.id;
+    state.library = state.library.filter(c => c.id !== removeId);
+    persistLibrary();
+    state.savedCurrent = false;
+    state.currentCardId = null;
+    $("#save-btn").classList.remove("saved");
+    // remove card element from board without re-rendering everything
+    const el = board.querySelector(`[data-id="${removeId}"]`);
+    if (el) el.remove();
+    $("#library-empty").style.display = state.library.length ? "none" : "flex";
+    haptic(15);
+    toast("라이브러리에서 삭제했어요.");
+    return;
+  }
+
+  // ── SAVE : guard duplicate (same photo + same track) ──
+  const duplicate = state.library.find(
+    c => c.track.youtubeId === t.id && c.imageUri === state.photo
+  );
+  if (duplicate) {
+    state.savedCurrent = true;
+    state.currentCardId = duplicate.id;
+    $("#save-btn").classList.add("saved");
+    return;
+  }
+
   const card = {
     id: "m" + Date.now(),
     savedAt: new Date().toISOString(),
@@ -497,18 +557,19 @@ $("#save-btn").addEventListener("click", () => {
     caption: state.analysis ? state.analysis.caption : "",
     track: { youtubeId: t.id, title: t.title, artist: t.artist },
     polaroidAngle: Math.round((Math.random() * 16 - 8) * 10) / 10,
-    position: null, // assigned on first render
+    position: null,
   };
   state.library.push(card);
   persistLibrary();
   state.savedCurrent = true;
+  state.currentCardId = card.id;
   $("#save-btn").classList.add("saved");
   haptic(20);
   // magnetic slide to LIBRARY, then the polaroid drops onto the pile
   snapTo(2);
   setTimeout(() => {
     renderLibrary(card.id);
-    setTimeout(() => haptic(15), 620); // landing tick
+    setTimeout(() => haptic(15), 620);
     toast("폴라로이드가 라이브러리에 떨어졌어요 ●");
   }, 280);
 });
@@ -624,6 +685,10 @@ function replayCard(el, card) {
     errorStreak = 0;
     snapTo(1);
     playTrack(currentTrack());
+    // this card already lives in the library — mark heart as filled immediately
+    state.savedCurrent = true;
+    state.currentCardId = card.id;
+    $("#save-btn").classList.add("saved");
   }, 500);
 }
 

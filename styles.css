@@ -287,40 +287,37 @@ body { font-family: var(--font-mono); color: var(--color-ink); overscroll-behavi
 .lp-disc.spinning { animation-play-state: running; }
 @keyframes lpspin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
 
-.lp-label {
+/* LP center thumbnail — rotates with the disc */
+.lp-center-img {
   position: absolute; left: 50%; top: 50%;
-  width: 34%; aspect-ratio: 1; border-radius: 50%;
+  width: 34%; aspect-ratio: 1;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle at 40% 35%, #d9d7cf, #b9b7ae);
-  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
-  padding: 12% 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #1c1c1c;
+  z-index: 1;
+  box-shadow: inset 0 0 12px rgba(0,0,0,0.7);
 }
-.lp-label-text {
-  font-size: 9px; letter-spacing: 0.3em; color: #6f6e67;
-  writing-mode: vertical-rl; transform: rotate(180deg);
-  position: absolute; left: 10%; top: 50%; transform: translateY(-50%) rotate(180deg);
+#lp-thumb {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 50%;
 }
-.lp-label-text.two { left: auto; right: 10%; transform: translateY(-50%); }
 .lp-hole {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
   width: 3.5%; aspect-ratio: 1; border-radius: 50%;
   background: var(--color-player-bg);
   box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
+  z-index: 2;
 }
-/* YouTube video shown in a fixed (non-rotating) circle on the LP label */
-.yt-circle {
-  position: absolute; left: 50%; top: 50%;
-  width: 30%; aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  overflow: hidden;
-  display: none;
-  box-shadow: 0 0 0 4px rgba(0,0,0,0.5);
-  background: #000;
+/* YouTube player — off-screen, audio only */
+#yt-circle {
+  position: fixed; left: -400px; top: 0;
+  width: 200px; height: 200px;
+  opacity: 0; pointer-events: none;
 }
-.yt-circle.visible { display: block; }
 #yt-holder, #yt-holder iframe { width: 100%; height: 100%; border: 0; }
-#yt-holder iframe { object-fit: cover; transform: scale(1.8); }
 
 /* Player polaroid */
 .player-polaroid {
