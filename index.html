@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Dumchtax Player</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Caveat:wght@500;700&family=Nanum+Pen+Script&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== Header ===== -->
+  <header class="header">
+    <div class="header-left">
+      <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 2 L14.5 9.5 L22 9.5 M12 22 L9.5 14.5 L2 14.5 M4.9 4.9 L9.5 9.5 M19.1 19.1 L14.5 14.5"/>
+      </svg>
+      <h1 class="app-title">Dumchtax Player</h1>
+    </div>
+    <button class="icon-btn" id="settings-btn" aria-label="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="12" cy="12" r="3.2"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- ===== Pages ===== -->
+  <main class="pages-viewport">
+    <div class="pages" id="pages">
+
+      <!-- PAGE 1 : HOME -->
+      <section class="page page-home" id="page-home">
+        <div class="home-inner">
+          <!-- Polaroid placeholder / print target -->
+          <div class="polaroid-out" id="polaroid-out">
+            <div class="polaroid-img-area" id="home-img-area">
+              <img id="home-photo" alt="" draggable="false" />
+              <div class="grain" id="home-grain"></div>
+              <div class="home-actions" id="home-actions">
+                <button class="btn-outline" id="choose-photo-btn">CHOOSE PHOTO</button>
+                <button class="btn-filled" id="take-photo-btn">TAKE PHOTO</button>
+              </div>
+              <span class="iso-label">ISO 800 <span class="dot red"></span></span>
+            </div>
+            <div class="polaroid-caption-area">
+              <p class="home-status" id="home-status">Ready...</p>
+            </div>
+          </div>
+
+          <!-- Camera body -->
+          <div class="camera-body">
+            <div class="camera-slot"></div>
+            <div class="camera-top">
+              <div class="viewfinder"><div class="viewfinder-glass"></div></div>
+              <div class="flash-window"></div>
+            </div>
+            <div class="rec-indicator"><span class="dot red blink"></span> REC</div>
+            <div class="lens-area">
+              <div class="lens-diamond"></div>
+              <div class="lens-ring">
+                <span class="lens-text top">INSTAX LENS 60mm</span>
+                <div class="lens-inner"><div class="lens-glass"></div></div>
+                <span class="lens-text bottom">FOCUS RANGE 0.3m~∞</span>
+              </div>
+            </div>
+            <span class="camera-model">instax mini 40</span>
+          </div>
+        </div>
+        <input type="file" id="file-input" accept="image/*" hidden />
+        <input type="file" id="camera-input" accept="image/*" capture="environment" hidden />
+      </section>
+
+      <!-- PAGE 2 : PLAYER -->
+      <section class="page page-player" id="page-player">
+        <div class="lp-glow" id="lp-glow"></div>
+        <div class="lp-wrap">
+          <div class="lp-disc" id="lp-disc">
+            <div class="lp-label">
+              <span class="lp-label-text">STEREO</span>
+              <span class="lp-label-text two">33⅓ RPM</span>
+            </div>
+            <div class="lp-hole"></div>
+          </div>
+          <div class="yt-circle" id="yt-circle"><div id="yt-holder"></div></div>
+        </div>
+
+        <div class="player-polaroid" id="player-polaroid">
+          <div class="player-polaroid-img"><img id="player-photo" alt="" draggable="false" /></div>
+          <button class="heart-btn" id="save-btn" aria-label="save to library">
+            <svg viewBox="0 0 24 24">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+          </button>
+          <p class="player-caption" id="player-caption">No music yet</p>
+        </div>
+
+        <div class="player-controls">
+          <button class="ctrl-btn" id="prev-btn" aria-label="previous">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>
+          </button>
+          <button class="play-btn" id="play-btn" aria-label="play/pause">
+            <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+          </button>
+          <button class="ctrl-btn" id="next-btn" aria-label="next">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg>
+          </button>
+        </div>
+
+        <div class="volume-fader">
+          <div class="volume-track" id="volume-track">
+            <div class="volume-knob" id="volume-knob"><span class="dot red"></span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 3 : LIBRARY -->
+      <section class="page page-library" id="page-library">
+        <h2 class="library-title">SCATTERED MEMORIES</h2>
+        <p class="library-sub">PLAYBACK LOG / RECENT</p>
+        <div class="library-board" id="library-board">
+          <div class="library-empty" id="library-empty">
+            <div class="empty-frame"></div>
+            <p class="empty-main">No memories yet.</p>
+            <p class="empty-sub">Take a photo and find your music.</p>
+            <button class="btn-filled" id="go-home-btn">GO TAKE A PHOTO</button>
+          </div>
+        </div>
+        <button class="rec-log-btn" id="rec-log-btn"><span class="dot red"></span> REC PLAYBACK LOG</button>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ===== Fader Navigation ===== -->
+  <nav class="fader-nav">
+    <div class="fader-labels">
+      <span class="fader-label" data-tab="0">HOME</span>
+      <span class="fader-label" data-tab="1">PLAYER</span>
+      <span class="fader-label" data-tab="2">LIBRARY</span>
+    </div>
+    <div class="fader-track-area" id="fader-track-area">
+      <div class="fader-track">
+        <span class="notch" style="left:0%"></span>
+        <span class="notch" style="left:50%"></span>
+        <span class="notch" style="left:100%"></span>
+      </div>
+      <div class="fader-knob" id="fader-knob"><span class="dot red" id="knob-dot"></span></div>
+    </div>
+    <div class="fader-icons">
+      <button class="nav-icon" data-tab="0" aria-label="home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 11l9-8 9 8M5 9.5V21h5v-6h4v6h5V9.5"/></svg>
+      </button>
+      <button class="nav-icon" data-tab="1" aria-label="player">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-2.6-6.3M21 4v5h-5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>
+      </button>
+      <button class="nav-icon" data-tab="2" aria-label="library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="13" height="13" rx="1"/><path d="M8 8h13v13H8z" opacity="0.6"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ===== Shutter flash overlay ===== -->
+  <div class="shutter-flash" id="shutter-flash"></div>
+
+  <!-- ===== Settings modal ===== -->
+  <div class="modal-backdrop" id="settings-modal" hidden>
+    <div class="modal">
+      <h3 class="modal-title">SETTINGS</h3>
+      <label class="modal-label">GEMINI API KEY
+        <input type="password" id="gemini-key-input" class="modal-input" placeholder="AIza..." autocomplete="off" />
+      </label>
+      <label class="modal-label">YOUTUBE DATA API KEY
+        <input type="password" id="youtube-key-input" class="modal-input" placeholder="AIza..." autocomplete="off" />
+      </label>
+      <p class="modal-note">키는 이 브라우저(localStorage)에만 저장됩니다.<br/>키가 없으면 데모 모드로 동작합니다.</p>
+      <div class="modal-actions">
+        <button class="btn-outline" id="settings-cancel">CANCEL</button>
+        <button class="btn-filled" id="settings-save">SAVE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Toast ===== -->
+  <div class="toast" id="toast" hidden></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
