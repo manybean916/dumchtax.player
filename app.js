@@ -112,7 +112,22 @@ function snapTo(tab, animate = true) {
   void knobDot.offsetWidth;
   knobDot.classList.add("pulse");
   haptic(20); // snap confirm — medium
+  updateNowPlayingPill();
 }
+
+/* ---------------- Now-playing mini pill ---------------- */
+function updateNowPlayingPill() {
+  const pill = $("#np-pill");
+  const t = state.results[state.trackIndex];
+  // visible only while music is playing AND the user is off the PLAYER page
+  if (state.playing && state.page !== 1 && t) {
+    $("#np-title").textContent = t.label || parseTrackCaption(t.title, t.artist);
+    pill.hidden = false;
+  } else {
+    pill.hidden = true;
+  }
+}
+$("#np-pill").addEventListener("click", () => snapTo(1)); // tap → back to PLAYER
 
 function nearestTab(x, vel) {
   if (Math.abs(vel) > 300) {
@@ -220,13 +235,13 @@ async function startPrintFlow(dataUrl) {
     homeActions.style.display = "none";
     homePhoto.src = dataUrl;
     homePhoto.style.display = "block";
-    homePhoto.classList.remove("developing");
+    homePhoto.classList.remove("developing", "developed");
     homePhoto.style.filter = "brightness(0.05) saturate(0) blur(8px)";
     polaroidOut.classList.remove("ejecting"); void polaroidOut.offsetWidth;
     polaroidOut.classList.add("ejecting");
   }, 300);
 
-  // [3] film developing (700–2200ms) — runs while Gemini analyzes
+  // [3] partial develop — photo stays half-revealed until analysis completes
   setTimeout(() => {
     homePhoto.style.filter = "";
     homePhoto.classList.add("developing");
@@ -235,9 +250,9 @@ async function startPrintFlow(dataUrl) {
     setStatus("Developing...", true);
   }, 700);
 
-  // analysis runs in parallel with the develop animation
+  // analysis runs in parallel with the develop-hold animation
   const analysisPromise = analyzePhoto(dataUrl);
-  const minDevelop = new Promise((r) => setTimeout(r, 2200));
+  const minDevelop = new Promise((r) => setTimeout(r, 2300));
 
   setTimeout(() => setStatus("Analyzing...", true), 1700);
 
@@ -249,33 +264,39 @@ async function startPrintFlow(dataUrl) {
     analysis = null;
   }
 
-  // [4] landing bounce + done
-  polaroidOut.classList.remove("bounce"); void polaroidOut.offsetWidth;
-  polaroidOut.classList.add("bounce");
-  haptic(12);
-
   if (!analysis) {
     analysis = fallbackAnalysis();
     toast("사진이 부끄러움을 타네요! 대신 지금 시간대에 어울리는 음악을 준비했어요");
   }
   state.analysis = analysis;
+
+  // [4] analysis done — NOW finish developing to full color
+  homePhoto.classList.remove("developing");
+  homePhoto.classList.add("developed");
+  polaroidOut.classList.remove("bounce"); void polaroidOut.offsetWidth;
+  polaroidOut.classList.add("bounce");
+  haptic(12);
   setStatus("Ready", false);
 
-  // search music & move to player
+  // search music while the final develop plays out
   const tracks = await findTracks(analysis);
   state.results = tracks;
   state.trackIndex = 0;
   errorStreak = 0;
   updatePlayerPolaroid();
+
+  // let the fully-developed photo be visible for a moment before leaving HOME
+  await new Promise((r) => setTimeout(r, 1000));
   snapTo(1); // slide fader to PLAYER
-  playTrack(tracks[0]);
+  // start audio only after the fader lands on the PLAYER page
+  setTimeout(() => playTrack(state.results[0]), 260);
   resetHomeAfter();
 }
 
 function resetHomeAfter() {
   setTimeout(() => {
     homePhoto.style.display = "none";
-    homePhoto.classList.remove("developing");
+    homePhoto.classList.remove("developing", "developed");
     homeActions.style.display = "flex";
     setStatus("Ready...", false);
   }, 1200);
@@ -341,25 +362,45 @@ const DEMO_TRACKS = [
   { id: "Na0w3Mz46GA", title: "asian lofi radio", artist: "Lofi Girl" },
 ];
 
+/* audio-track ranking — prefer pure audio uploads over MV/live/cover videos */
+function audioScore(title, channel) {
+  let score = 0;
+  if (/- Topic$/.test(channel)) score += 6;          // auto-generated art track = 순수 음원
+  if (/official audio|오디오/i.test(title)) score += 4;
+  if (/\baudio\b/i.test(title)) score += 2;
+  if (/lyrics?|가사/i.test(title)) score += 1;       // lyric videos still play the studio track
+  if (/M\/?V|뮤직비디오|music video/i.test(title)) score -= 3;
+  if (/\blive\b|라이브|직캠|fancam|concert|콘서트|무대/i.test(title)) score -= 4;
+  if (/cover|커버|reaction|리액션|연주|piano|guitar|instrumental/i.test(title)) score -= 5;
+  return score;
+}
+
 async function findTracks(analysis) {
   if (!settings.youtubeKey) {
     toast("YouTube API 키가 없어 데모 트랙을 재생합니다 (⚙️ 설정에서 키 입력)");
     return DEMO_TRACKS.map((t) => ({ ...t }));
   }
   try {
-    const q = encodeURIComponent(analysis.musicQuery);
+    // "audio"를 덧붙여 음원 업로드(Topic/Official Audio)가 상위에 오도록 검색
+    const q = encodeURIComponent(analysis.musicQuery + " audio");
     const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&videoEmbeddable=true&maxResults=8&q=${q}&key=${encodeURIComponent(settings.youtubeKey)}`
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&videoEmbeddable=true&maxResults=12&q=${q}&key=${encodeURIComponent(settings.youtubeKey)}`
     );
     if (!res.ok) throw new Error("YouTube API " + res.status);
     const data = await res.json();
     const items = (data.items || []).filter((i) => i.id?.videoId);
     if (!items.length) throw new Error("no results");
-    return items.map((i) => ({
-      id: i.id.videoId,
-      title: decodeHtml(i.snippet.title),
-      artist: decodeHtml(i.snippet.channelTitle),
-    }));
+    return items
+      .map((i, idx) => ({
+        id: i.id.videoId,
+        title: decodeHtml(i.snippet.title),
+        artist: decodeHtml(i.snippet.channelTitle),
+        _score: audioScore(decodeHtml(i.snippet.title), decodeHtml(i.snippet.channelTitle)),
+        _idx: idx,
+      }))
+      // 음원 점수 우선, 동점이면 검색 순위 유지
+      .sort((a, b) => b._score - a._score || a._idx - b._idx)
+      .map(({ _score, _idx, ...t }) => t);
   } catch (err) {
     console.warn("youtube search failed:", err);
     toast("음원 검색에 실패했어요. 유사한 무드의 대체 음원으로 전환합니다.");
@@ -443,6 +484,13 @@ function cleanToken(raw) {
 }
 
 function parseTrackCaption(title, channelTitle) {
+  // Topic 채널(자동 생성 음원): 제목 = 곡명, 채널명 = "아티스트 - Topic"
+  const topic = (channelTitle || "").match(/^(.+?)\s*-\s*Topic$/);
+  if (topic) {
+    const artist = cleanToken(topic[1]);
+    const song   = cleanToken(title);
+    if (artist && song) return `${artist} — ${song}`;
+  }
   // 영상 제목에서 "Artist - Song" 패턴 추출
   const match = title.match(/^(.+?)\s+[-–—]\s+(.+)$/);
   if (match) {
@@ -463,7 +511,8 @@ function updatePlayerPolaroid() {
     $("#lp-thumb").src = state.photo;
   }
   if (t) {
-    cap.textContent = parseTrackCaption(t.title, t.artist);
+    // prefer the label frozen at save time — never re-derive for saved cards
+    cap.textContent = t.label || parseTrackCaption(t.title, t.artist);
   } else {
     cap.textContent = state.analysis ? state.analysis.caption : "No music yet";
   }
@@ -475,6 +524,7 @@ function setPlayingUI(playing) {
   $("#lp-glow").classList.toggle("on", playing);
   $("#icon-play").style.display = playing ? "none" : "block";
   $("#icon-pause").style.display = playing ? "block" : "none";
+  updateNowPlayingPill();
 }
 
 $("#play-btn").addEventListener("click", () => {
@@ -493,27 +543,61 @@ function stepTrack(dir) {
 }
 function nextTrack() { stepTrack(1); }
 
-/* ---------------- Volume fader ---------------- */
+/* ---------------- Volume — endless rotary knob ----------------
+   relative (encoder-style) rotation: the knob spins freely 360°,
+   volume clamps at 0/100 but the spin interaction never stops    */
 let currentVolume = 65;
-const volTrack = $("#volume-track");
-const volKnob = $("#volume-knob");
-function setVolumeFromY(clientY) {
-  const r = volTrack.getBoundingClientRect();
-  const ratio = Math.max(0, Math.min(1, (clientY - r.top) / r.height));
-  currentVolume = Math.round((1 - ratio) * 100);
-  volKnob.style.top = `${ratio * 100}%`;
-  if (ytPlayer && state.playerReady) ytPlayer.setVolume(currentVolume);
+let volAngle = -135 + (currentVolume / 100) * 270; // visual angle, unbounded
+const volWrap = $("#volume-knob-wrap");
+const volDial = $("#vol-dial");
+const VOL_GAIN = 100 / 270; // volume change per degree of rotation
+
+function renderDial() {
+  volDial.style.transform = `rotate(${volAngle}deg)`;
 }
-volKnob.addEventListener("pointerdown", (e) => {
-  volKnob.setPointerCapture(e.pointerId);
-  const move = (ev) => setVolumeFromY(ev.clientY);
-  const up = () => {
-    volKnob.removeEventListener("pointermove", move);
-    volKnob.removeEventListener("pointerup", up);
+
+function applyVolume(v) {
+  currentVolume = Math.max(0, Math.min(100, v));
+  if (ytPlayer && state.playerReady) ytPlayer.setVolume(Math.round(currentVolume));
+}
+
+volWrap.addEventListener("pointerdown", (e) => {
+  volWrap.setPointerCapture(e.pointerId);
+  let prevDeg = null;
+  let lastTick = Math.round(currentVolume / 10);
+  const pointerDeg = (ev) => {
+    const r = volWrap.getBoundingClientRect();
+    const dx = ev.clientX - (r.left + r.width / 2);
+    const dy = ev.clientY - (r.top + r.height / 2);
+    if (Math.hypot(dx, dy) < 6) return null; // dead zone at the very center
+    return (Math.atan2(dx, -dy) * 180) / Math.PI; // 0° = up
   };
-  volKnob.addEventListener("pointermove", move);
-  volKnob.addEventListener("pointerup", up);
+  const onMove = (ev) => {
+    const deg = pointerDeg(ev);
+    if (deg === null) return;
+    if (prevDeg === null) { prevDeg = deg; return; }
+    let delta = deg - prevDeg;
+    if (delta > 180) delta -= 360;        // wrap-around at ±180°
+    else if (delta < -180) delta += 360;
+    prevDeg = deg;
+    volAngle += delta;                    // knob always follows the finger
+    applyVolume(currentVolume + delta * VOL_GAIN);
+    renderDial();
+    // subtle detent haptic every 10%
+    const tick = Math.round(currentVolume / 10);
+    if (tick !== lastTick) { lastTick = tick; haptic(5); }
+  };
+  onMove(e);
+  const onUp = () => {
+    volWrap.removeEventListener("pointermove", onMove);
+    volWrap.removeEventListener("pointerup", onUp);
+    volWrap.removeEventListener("pointercancel", onUp);
+  };
+  volWrap.addEventListener("pointermove", onMove);
+  volWrap.addEventListener("pointerup", onUp);
+  volWrap.addEventListener("pointercancel", onUp);
 });
+renderDial(); // initialize dial rotation
 
 /* ---------------- Save to library ---------------- */
 $("#save-btn").addEventListener("click", () => {
@@ -555,7 +639,11 @@ $("#save-btn").addEventListener("click", () => {
     imageUri: state.photo,
     moodTags: state.analysis ? state.analysis.keywords : [],
     caption: state.analysis ? state.analysis.caption : "",
-    track: { youtubeId: t.id, title: t.title, artist: t.artist },
+    track: {
+      youtubeId: t.id, title: t.title, artist: t.artist,
+      // freeze the exact caption shown on the player so it never changes after saving
+      label: t.label || parseTrackCaption(t.title, t.artist),
+    },
     polaroidAngle: Math.round((Math.random() * 16 - 8) * 10) / 10,
     position: null,
   };
@@ -621,7 +709,7 @@ function buildCardEl(card) {
   img.alt = card.caption || "";
   const cap = document.createElement("p");
   cap.className = "card-caption";
-  cap.textContent = card.caption || card.track.title;
+  cap.textContent = card.track.label || card.caption || card.track.title;
   el.appendChild(img);
   el.appendChild(cap);
   attachCardInteraction(el, card);
@@ -680,7 +768,10 @@ function replayCard(el, card) {
     // restore photo + track into player
     state.photo = card.imageUri;
     state.analysis = { caption: card.caption, keywords: card.moodTags, musicQuery: "" };
-    state.results = [{ id: card.track.youtubeId, title: card.track.title, artist: card.track.artist }];
+    state.results = [{
+      id: card.track.youtubeId, title: card.track.title,
+      artist: card.track.artist, label: card.track.label,
+    }];
     state.trackIndex = 0;
     errorStreak = 0;
     snapTo(1);
@@ -692,15 +783,6 @@ function replayCard(el, card) {
   }, 500);
 }
 
-$("#rec-log-btn").addEventListener("click", () => {
-  // re-scatter the pile
-  state.library.forEach((c) => {
-    c.position = null;
-    c.polaroidAngle = Math.round((Math.random() * 16 - 8) * 10) / 10;
-  });
-  renderLibrary();
-  haptic(15);
-});
 $("#go-home-btn").addEventListener("click", () => snapTo(0));
 
 /* ================================================================

@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dumchtax Player — Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-dark:    #0A0A0A;
+  --bg-mid:     #141414;
+  --bg-surface: #1C1C1C;
+  --bg-light:   #F5F5F0;
+  --bg-paper:   #F0EDE4;
+  --accent:     #913439;
+  --accent-dim: #5C1F22;
+  --border:     #2C2C2C;
+  --border-lt:  #DEDAD0;
+  --white:      #F5F5F0;
+  --ink:        #0A0A0A;
+  --muted:      #5A5A5A;
+  --muted-lt:   #9A9A9A;
+  --mono: 'JetBrains Mono', Consolas, monospace;
+  --body: system-ui, -apple-system, sans-serif;
+  --script: 'Caveat', cursive;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#111;font-family:var(--mono)}
+
+/* ── Toolbar ── */
+.toolbar{
+  position:fixed;top:0;left:0;right:0;z-index:200;
+  background:#0A0A0A;border-bottom:1px solid #1e1e1e;
+  display:flex;align-items:center;gap:10px;padding:7px 16px;
+  height:44px;
+}
+.toolbar button{
+  background:var(--accent);border:none;color:#fff;
+  padding:5px 13px;font-family:var(--mono);font-size:10px;
+  cursor:pointer;letter-spacing:2px;transition:background .15s;
+}
+.toolbar button:hover{background:#b04448}
+.tb-title{font-size:10px;color:#5a5a5a;letter-spacing:3px;margin-left:auto}
+.tb-counter{font-size:11px;color:var(--white);letter-spacing:2px;min-width:60px;text-align:right}
+
+/* ── Viewer ── */
+.viewer{
+  padding-top:44px;height:100vh;display:flex;
+  flex-direction:column;align-items:center;
+}
+
+/* ── Slide ── */
+.slide{
+  position:relative;
+  width:min(95vw, calc((100vh - 44px) * 16/9));
+  aspect-ratio:16/9;
+  overflow:hidden;
+  flex-shrink:0;
+  box-shadow:0 8px 40px rgba(0,0,0,.7);
+}
+.slide-inner{
+  position:absolute;inset:0;
+  /* Everything inside uses vw/vh units relative to slide size via container queries */
+}
+
+/* ── Slide thumbnails strip ── */
+.thumbs{
+  display:none;
+  position:fixed;left:0;top:44px;bottom:0;width:160px;
+  background:#0a0a0a;border-right:1px solid #1e1e1e;
+  overflow-y:auto;z-index:100;padding:8px;gap:6px;
+  flex-direction:column;
+}
+.thumb{
+  width:100%;aspect-ratio:16/9;overflow:hidden;cursor:pointer;
+  border:1px solid transparent;position:relative;font-size:0;
+}
+.thumb:hover,.thumb.active{border-color:var(--accent)}
+.thumb iframe{
+  width:400%;height:400%;transform:scale(0.25);transform-origin:0 0;
+  pointer-events:none;
+}
+
+/* ── Slide navs ── */
+body.show-thumbs .viewer{padding-left:160px}
+body.show-thumbs .thumbs{display:flex}
+
+/* fullscreen */
+body.fs .toolbar{display:none}
+body.fs .viewer{padding-top:0}
+body.fs .slide{
+  width:100vw;
+  height:100vh;
+  aspect-ratio:unset;
+}
+
+/* ══════════════════════════════════════════
+   SLIDE CONTENT STYLES
+   All sizes in cqw/cqh relative to slide container
+════════════════════════════════════════════ */
+.slide{container-type:size;container-name:slide}
+
+/* typography helpers */
+.mono{font-family:var(--mono)}
+.body-font{font-family:var(--body)}
+.script{font-family:var(--script)}
+
+/* absolute placement helper */
+.abs{position:absolute}
+
+/* color backgrounds */
+.bg-dark{background:var(--bg-dark)}
+.bg-mid{background:var(--bg-mid)}
+.bg-light{background:var(--bg-light)}
+.bg-paper{background:var(--bg-paper)}
+.bg-accent{background:var(--accent)}
+.bg-accent-dim{background:var(--accent-dim)}
+
+/* shapes */
+.rect{position:absolute}
+.circle{position:absolute;border-radius:50%}
+.lp{position:absolute;border-radius:50%}
+.lp-groove{position:absolute;border-radius:50%;border:1px solid #1e1e1e;background:transparent}
+
+/* polaroid */
+.polaroid{
+  position:absolute;background:var(--bg-paper);
+  box-shadow:4px 6px 20px rgba(0,0,0,.35);
+}
+.polaroid-photo{position:absolute}
+.polaroid-cap{
+  position:absolute;
+  font-family:var(--script);
+  color:#3A3835;
+  text-align:center;
+  line-height:1;
+}
+
+/* REC dot */
+.rec-dot{position:absolute;border-radius:50%;background:var(--accent)}
+
+/* text */
+.t{
+  position:absolute;
+  white-space:pre-wrap;
+  line-height:1.2;
+  overflow:hidden;
+}
+
+/* fade-in on slide entry */
+.slide .slide-inner{animation:fadein .35s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* slide number badge */
+.s-num{
+  position:absolute;bottom:1.5cqh;right:1.5cqw;
+  font-size:1.2cqh;font-family:var(--mono);
+  color:#2C2C2C;letter-spacing:.15em;
+}
+
+/* ══ LP shape ══ */
+.lp-outer{position:absolute;border-radius:50%;background:#0D0D0D;border:1px solid #222}
+.lp-g1,.lp-g2,.lp-g3,.lp-g4{
+  position:absolute;border-radius:50%;
+  border:.3px solid #1e1e1e;background:transparent;
+}
+.lp-center{position:absolute;border-radius:50%}
+.lp-hole{position:absolute;border-radius:50%;background:var(--bg-dark)}
+
+/* ══ Camera shape ══ */
+.cam-body{position:absolute;background:#1A1A1A;border-radius:3px}
+.cam-top{position:absolute;background:#212121}
+.cam-lens-ring{position:absolute;border-radius:50%;background:#111;border:1.5px solid #444}
+.cam-lens-inner{position:absolute;border-radius:50%;background:#192838;border:.8px solid #2A4050}
+.cam-lens-core{position:absolute;border-radius:50%;background:#142535}
+.cam-vf{position:absolute;background:#0A1520}
+.cam-flash{position:absolute;background:#181A10}
+.cam-slot{position:absolute;background:#111}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button onclick="prev()">◀ PREV</button>
+  <button onclick="next()">NEXT ▶</button>
+  <button onclick="toggleThumb()">SLIDES</button>
+  <button onclick="toggleFS()">⛶ FULL</button>
+  <span class="tb-counter" id="counter">1 / 17</span>
+  <span class="tb-title">DUMCHTAX PLAYER · PORTFOLIO · 윤다빈</span>
+</div>
+
+<div class="viewer" id="viewer">
+<!-- Slides injected by JS -->
+</div>
+
+<script>
+/* ════════════════════════════════
+   SLIDE DEFINITIONS
+════════════════════════════════ */
+const slides = [];
+
+function slide(bg, fn) {
+  slides.push({ bg, fn });
+}
+
+/* helpers that return HTML strings */
+const R = (x,y,w,h,bg,extra='') =>
+  `<div class="rect" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%;background:${bg};${extra}"></div>`;
+
+const C = (x,y,r,bg,extra='') =>
+  `<div class="circle" style="left:${x}%;top:${y}%;width:${r}%;height:${r}%;background:${bg};${extra}"></div>`;
+
+const T = (x,y,w,h,text,{size=2.4,color='#F5F5F0',mono=true,bold=false,italic=false,
+  spacing=0,align='left',lineH=1.2}={}) => {
+  const ff = mono ? "'JetBrains Mono',Consolas,monospace" : "'system-ui',sans-serif";
+  const fw = bold ? 700 : 400;
+  return `<div class="t" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%;
+    font-size:${size}cqh;font-family:${ff};font-weight:${fw};font-style:${italic?'italic':'normal'};
+    color:${color};letter-spacing:${spacing}em;text-align:${align};line-height:${lineH};
+    overflow:hidden;">${text.replace(/\n/g,'<br>')}</div>`;
+};
+
+const DOT = (x,y,r=1.2) =>
+  `<div class="rec-dot" style="left:${x}%;top:${y}%;width:${r}%;height:${r}cqw;"></div>`;
+
+function LP(x,y,sz, photoBg='#253035') {
+  const s = sz;
+  const c = s*0.38, hole = s*0.07;
+  const cx = x+(s-c)/2, cy = y+(s-c)/2;
+  const hx = x+(s-hole)/2, hy = y+(s-hole)/2;
+  return `
+  <div class="lp-outer" style="left:${x}%;top:${y}%;width:${s}%;height:${s}cqw;"></div>
+  ${[0.82,0.74,0.66,0.58].map(g=>{
+    const gx=x+(s-s*g)/2, gy=y+(s-s*g)/2;
+    return `<div class="lp-groove" style="left:${gx}%;top:${gy}%;width:${s*g}%;height:${s*g}cqw;"></div>`;
+  }).join('')}
+  <div class="lp-center" style="left:${cx}%;top:${cy}%;width:${c}%;height:${c}cqw;background:${photoBg};border-radius:50%;"></div>
+  <div class="lp-hole" style="left:${hx}%;top:${hy}%;width:${hole}%;height:${hole}cqw;border-radius:50%;background:#0A0A0A;"></div>`;
+}
+
+function POLAROID(x,y,w,h,{bg='#253035',cap='',rot=0,shadow=true}={}) {
+  const pad=4, capH=12;
+  const totalH = h + capH;
+  const sh = shadow ? 'box-shadow:3px 5px 16px rgba(0,0,0,.4)' : '';
+  return `<div class="polaroid" style="left:${x}%;top:${y}%;width:${w}%;height:${totalH}%;transform:rotate(${rot}deg);${sh}">
+    <div style="position:absolute;left:${pad}%;top:${pad/2*(100/(totalH))}%;width:${100-pad*2}%;height:${(h/totalH*100)-pad/2*(100/(totalH))}%;background:${bg};"></div>
+    <div style="position:absolute;bottom:2%;left:0;width:100%;text-align:center;font-family:'Caveat',cursive;font-size:2cqh;color:#3A3835;font-style:italic;">${cap}</div>
+  </div>`;
+}
+
+function CAM(x,y,w,h) {
+  const lx=x+w*0.1, ly=y+h*0.35, lr=w*0.3;
+  return `
+  <div class="cam-body" style="left:${x}%;top:${y+h*0.18}%;width:${w}%;height:${h*0.82}%;border-radius:2%"></div>
+  <div class="cam-top" style="left:${x+1}%;top:${y}%;width:${w-2}%;height:${h*0.2}%;"></div>
+  <div class="cam-lens-ring" style="left:${lx}%;top:${ly}%;width:${lr}%;height:${lr}cqw;border-radius:50%;"></div>
+  <div class="cam-lens-inner" style="left:${lx+lr*0.12}%;top:${ly+lr*0.12}%;width:${lr*0.76}%;height:${lr*0.76}cqw;border-radius:50%;"></div>
+  <div class="cam-lens-core" style="left:${lx+lr*0.26}%;top:${ly+lr*0.26}%;width:${lr*0.48}%;height:${lr*0.48}cqw;border-radius:50%;"></div>
+  <div class="cam-vf" style="left:${x+w*0.05}%;top:${y+h*0.02}%;width:${w*0.15}%;height:${h*0.12}%;"></div>
+  <div class="cam-flash" style="left:${x+w*0.25}%;top:${y+h*0.02}%;width:${w*0.22}%;height:${h*0.12}%;"></div>
+  ${DOT(x+w*0.7, y+h*0.03, 1.4)}
+  <div class="t" style="left:${x+w*0.75}%;top:${y+h*0.02}%;width:5%;height:5%;font-size:1.2cqh;color:#913439;font-family:monospace">REC</div>
+  <div style="position:absolute;left:${x+w*0.12}%;top:${y+h*0.17}%;width:${w*0.6}%;height:${h*0.04}%;background:#111"></div>
+  `;
+}
+
+const LABEL = (x,y,text,light=false) =>
+  DOT(x,y+0.4,0.9) +
+  T(x+2,y,20,4, text.toUpperCase(), {size:1.4,color:light?'#5A5A5A':'#9A9A9A',spacing:.3});
+
+const HLINE = (x,y,w,color='#2C2C2C') =>
+  R(x,y,w,0.15,color);
+
+const SNUM = (n,total=17) =>
+  `<div class="s-num">${String(n).padStart(2,'0')} / ${total}</div>`;
+
+/* ════════
+   SLIDES
+════════ */
+
+// 1 — COVER
+slide('#0A0A0A', () => `
+  ${R(0,0,100,0.7,'#913439')}
+  ${DOT(4.2,6.5,1.4)}
+  ${T(4.2,5.8,12,3,'REC',{size:1.6,color:'#913439',spacing:.4})}
+  ${T(4.2,14,80,24,'DUMCHTAX',{size:20,bold:true,spacing:.06})}
+  ${T(4.2,36,80,22,'PLAYER',{size:20,bold:true,color:'#913439',spacing:.06})}
+  ${HLINE(4.2,64,44)}
+  ${T(4.2,67,60,5,'PHOTO → MOOD → MUSIC  ·  UX/UI CASE STUDY',{size:1.7,color:'#9A9A9A',spacing:.45})}
+  ${T(4.2,74,40,7,'윤다빈 / YUNDABIN',{size:3.2,spacing:.15})}
+  ${T(4.2,82,35,5,'UX · UI DESIGNER',{size:2,color:'#8A8A8A',spacing:.4})}
+  ${POLAROID(67,12,24,26,{bg:'#253040',cap:'Sun-Drenched',rot:4})}
+  ${POLAROID(71,22,22,22,{bg:'#1A2030',cap:'Golden Hour',rot:-6})}
+  ${LP(68.5,14,20,'#30404A')}
+  ${R(0,98,100,2,'#5C1F22')}
+  ${T(85,95,12,4,'2025',{size:1.4,color:'#2C2C2C',align:'right'})}
+  ${SNUM(1)}
+`);
+
+// 2 — PROJECT OVERVIEW
+slide('#F5F5F0', () => `
+  ${LABEL(4.2,4.5,'01 / Project Overview',true)}
+  ${T(4.2,10,70,14,'AT A GLANCE',{size:9,bold:true,spacing:.35,color:'#0A0A0A'})}
+  ${HLINE(4.2,25,92,'#DEDAD0')}
+  ${R(4.2,28,0.2,24,'#913439')} ${T(4.2,28,8,12,'3',{size:18,bold:true,color:'#913439'})}
+  ${T(4.2,46,25,5,'SCREENS',{size:2.2,bold:true,color:'#0A0A0A',spacing:.3})}
+  ${T(4.2,52,25,5,'HOME · PLAYER · LIBRARY',{size:2,color:'#5A5A5A',mono:false})}
+  ${HLINE(34,29,0.15,'#DEDAD0',)}
+  ${R(34.5,28,0.12,24,'#DEDAD0')}
+  ${R(4.2,28,0.2,24,'#913439')}
+  ${T(36,28,8,12,'2',{size:18,bold:true,color:'#913439'})}
+  ${T(36,46,25,5,'AI MODELS',{size:2.2,bold:true,color:'#0A0A0A',spacing:.3})}
+  ${T(36,52,25,5,'Gemini Vision + YouTube API',{size:2,color:'#5A5A5A',mono:false})}
+  ${R(65.5,28,0.12,24,'#DEDAD0')}
+  ${T(67,28,8,12,'0',{size:18,bold:true,color:'#913439'})}
+  ${T(67,46,25,5,'FRAMEWORKS',{size:2.2,bold:true,color:'#0A0A0A',spacing:.3})}
+  ${T(67,52,25,5,'Vanilla HTML / CSS / JS',{size:2,color:'#5A5A5A',mono:false})}
+  ${T(4.2,62,60,5,'WHAT IS DUMCHTAX PLAYER?',{size:2,bold:true,color:'#0A0A0A',spacing:.35})}
+  ${T(4.2,68,68,14,'사진 한 장을 찍으면 Gemini AI가 그 순간의 무드를 읽고, 어울리는 음악을 YouTube에서 찾아 재생합니다. 폴라로이드와 LP 바이닐의 아날로그 감성 속에서 디지털 음악 경험을 새롭게 정의합니다.',{size:2.2,color:'#5A5A5A',mono:false,lineH:1.6})}
+  ${['#Digilog','#MoodMusic','#Polaroid','#LP','#AIPhoto','#Mobile'].map((t,i)=>
+    R(4.2+i*15.6,83,15,7,'#EAEAE0','border:1px solid #DEDAD0;border-radius:2px') +
+    T(4.2+i*15.6,84,15,5,t,{size:1.8,color:'#5A5A5A',align:'center',spacing:.1})
+  ).join('')}
+  ${CAM(78,60,18,28)}
+  ${SNUM(2)}
+`);
+
+// 3 — PROBLEM SPACE
+slide('#0A0A0A', () => `
+  ${LABEL(4.2,4.5,'02 / Problem Space')}
+  ${T(4.2,10,70,20,'WHY DOES THIS\nNEED TO EXIST?',{size:9,bold:true,spacing:.3,lineH:1.1})}
+  ${HLINE(4.2,31,92)}
+  ${[
+    ['01','선택의 피로감','Decision Fatigue','플레이리스트 탐색에 지쳐 음악을 듣지 않는 사용자. 알고리즘 추천은 정확하지만 감성적 연결이 없다.'],
+    ['02','휘발되는 추억','Ephemeral Moments','사진과 그 순간의 감정은 기억되지만, 그때 들었던 음악과의 연결은 사라진다. 기억을 아카이빙할 도구가 없다.'],
+    ['03','아날로그 감성의 결핍','Missing Analog Soul','스트리밍 서비스는 편리하지만 음악을 소유하는 경험, 물성이 있는 감각을 줄 수 없다. 감성적 여백이 없다.'],
+  ].map(([n,ko,en,desc],i)=>{
+    const y = 35+i*20;
+    return `
+      ${T(4.2,y,8,10,n,{size:7,bold:true,color:'#5C1F22'})}
+      ${T(12,y+0.5,28,7,ko,{size:4,bold:true})}
+      ${T(12,y+9,28,5,en,{size:2,color:'#913439',spacing:.3})}
+      ${T(42,y+1,54,12,desc,{size:2.2,color:'#8A8A8A',mono:false,lineH:1.55})}
+      ${i<2?HLINE(4.2,y+18.5,92):''}`
+  }).join('')}
+  ${SNUM(3)}
+`);
+
+// 4 — SOLUTION
+slide('#F5F5F0', () => `
+  ${LABEL(4.2,4.5,'03 / Solution',true)}
+  ${T(4.2,10,55,20,'DUMCHTAX\nSOLVES THIS.',{size:9,bold:true,color:'#0A0A0A',spacing:.3,lineH:1.05})}
+  ${[
+    ['◈','Multimodal 감성 매칭','사진 → Gemini Vision API → 무드 키워드 추출 → YouTube 검색. 알고리즘이 아닌 당신의 지금 이 순간이 플레이리스트를 만든다.','P0 CORE','#913439',4.2,36],
+    ['◉','오브제 중심 아카이빙','폴라로이드 형태의 카드가 LIBRARY에 쌓인다. 사진 + 음악 + 순간을 하나의 오브제로 묶어 저장하고 재생한다.','P0 CORE','#913439',50.5,36],
+    ['◫','아날로그 인터페이스','LP 회전, 아날로그 페이더 내비게이션, 폴라로이드 인화 애니메이션. 디지털이지만 손으로 만지는 것처럼 느껴지는 UX.','P1 DELIGHT','#5C1F22',4.2,64],
+    ['◬','Zero Friction Onboarding','API 키 없이도 데모 모드로 즉시 사용 가능. 설정은 설정 모달 하나에서 끝난다.','P2 ACCESS','#5C1F22',50.5,64],
+  ].map(([icon,title,desc,tag,tc,x,y])=>`
+    ${R(x,y,45,24,y===36?'#EDEAE0':'#F0EDE4','border:1px solid #DEDAD0')}
+    ${T(x+1.5,y+2.5,6,8,icon,{size:4,color:'#913439'})}
+    ${R(x+33,y+2,11,5,tc)}
+    ${T(x+33,y+2,11,5,tag,{size:1.5,color:'#fff',align:'center',spacing:.1})}
+    ${T(x+1.5,y+10,42,5,title,{size:2.8,bold:true,color:'#0A0A0A'})}
+    ${T(x+1.5,y+16,42,9,desc,{size:2,color:'#5A5A5A',mono:false,lineH:1.4})}
+  `).join('')}
+  ${SNUM(4)}
+`);
+
+// 5 — TARGET USER
+slide('#F5F5F0', () => `
+  ${LABEL(4.2,4.5,'04 / Target User',true)}
+  ${T(4.2,10,70,12,'WHO IS THIS FOR?',{size:8,bold:true,color:'#0A0A0A',spacing:.4})}
+  ${HLINE(4.2,22,92,'#DEDAD0')}
+  ${R(4.2,25,27,70,'#F0EDE4','border:1px solid #DEDAD0')}
+  ${C(7,27,18,'#D8D4C8')}
+  ${C(10,28,12,'#B8B4A8')}
+  ${T(5,56,27,5,'김지수 / 25세',{size:2.6,bold:true,color:'#0A0A0A',align:'center'})}
+  ${T(5,62,27,7,'대학원생 / 사진 좋아하는\n감성 밀레니얼·Z세대',{size:2,color:'#5A5A5A',mono:false,align:'center',lineH:1.4})}
+  ${['일상 사진 자주 촬영','음악은 무드로 선택','아날로그 물건 수집','Spotify 헤비유저'].map((t,i)=>
+    DOT(5.5,72+i*5.5,1) + T(7.5,71+i*5.5,22,4.5,t,{size:2,color:'#5A5A5A',mono:false})
+  ).join('')}
+  ${[
+    ['01','사진 촬영','산책 중 노을 사진을 찍는다. 앱을 열고 TAKE PHOTO 버튼을 탭한다.'],
+    ['02','무드 분석','셔터 플래시 후 폴라로이드가 인화된다. Gemini가 \'따뜻함, 그리움\'을 읽는다.'],
+    ['03','음악 재생','페이더가 PLAYER로 이동. LP가 돌기 시작하며 IU의 \'밤편지\'가 흐른다.'],
+    ['04','추억 저장','♡ 탭 → 페이더가 LIBRARY로. 폴라로이드가 보드에 툭 떨어진다.'],
+  ].map(([n,title,desc],i)=>{
+    const y=26+i*17.5;
+    return `
+      ${R(33,y,63,15.5,i%2===0?'#F0EDE4':'#EAEAE0','border:1px solid #DEDAD0')}
+      ${R(33,y,4.5,15.5,i===3?'#913439':'#5C1F22')}
+      ${T(33,y+4.5,4.5,5,n,{size:2.4,bold:true,color:'#fff',align:'center'})}
+      ${T(38.5,y+2,24,5,title,{size:2.8,bold:true,color:'#0A0A0A'})}
+      ${T(38.5,y+8,55,8,desc,{size:2,color:'#5A5A5A',mono:false,lineH:1.4})}
+      ${i<3?T(61,y+14.5,5,3,'↓',{size:2.5,color:'#9A9A9A',align:'center'}):''}`
+  }).join('')}
+  ${SNUM(5)}
+`);
+
+// 6 — DIGILOG
+slide('#0A0A0A', () => `
+  ${LABEL(4.2,4.5,'05 / Design Philosophy')}
+  ${T(-2,12,110,35,'DIGILOG',{size:30,bold:true,color:'#141414',spacing:.02})}
+  ${T(4.2,18,38,10,'DIGITAL',{size:7.5,bold:true})}
+  ${T(41,18,8,10,'+',{size:7.5,bold:true,color:'#913439'})}
+  ${T(47,18,40,10,'ANALOG',{size:7.5,bold:true})}
+  ${HLINE(4.2,32,92)}
+  ${T(4.2,35,68,14,'디지털의 편의와 아날로그의 물성·감성을 동시에 추구하는 디자인 철학.\nDumchtax Player는 스마트폰 앱이지만 폴라로이드 카메라처럼, Spotify이지만 LP 플레이어처럼 경험된다.',{size:2.4,color:'#8A8A8A',mono:false,lineH:1.6})}
+  ${[
+    ['◈','TACTILE FIRST','드래그·햅틱·물리 기반 인터랙션'],
+    ['◉','OBJECT UX','폴라로이드·LP·카메라 오브제 중심'],
+    ['◫','ANALOG TIME','즉각성 없는 여백, 인화 대기의 미학'],
+    ['◬','DARK CANVAS','빛을 담는 어두운 배경, 감성 집중'],
+  ].map(([sym,title,desc],i)=>{
+    const x=4.2+i*24;
+    return `
+      ${i>0?HLINE(x-2,57,0.12):'' }
+      ${T(x,57,5,7,sym,{size:3.5,color:'#913439'})}
+      ${T(x,65,22,5,title,{size:2.1,bold:true,spacing:.2})}
+      ${T(x,71,22,7,desc,{size:2,color:'#8A8A8A',mono:false})}`
+  }).join('')}
+  ${HLINE(4.2,80,92)}
+  ${T(4.2,82,92,7,'"손에 잡히는 것처럼 느껴지는 디지털. 기억되는 음악."',{size:2.2,color:'#8A8A8A',mono:false,italic:true,align:'center'})}
+  ${SNUM(6)}
+`);
+
+// 7 — COLOR SYSTEM
+slide('#141414', () => `
+  ${LABEL(4.2,4.5,'06 / Design System — Color')}
+  ${T(4.2,10,25,12,'COLOR',{size:9,bold:true,spacing:.5})}
+  ${T(22,10,35,12,'SYSTEM',{size:9,bold:true,color:'#913439',spacing:.5})}
+  ${HLINE(4.2,23,92)}
+  ${[
+    ['0A0A0A','BG DARK','Primary background','#F5F5F0',4.2,26],
+    ['141414','SURFACE','Elevated surface','#F5F5F0',20.5,26],
+    ['2C2C2C','BORDER','Dividers & lines','#9A9A9A',36.8,26],
+    ['913439','ACCENT','Primary action, REC','#F5F5F0',53.1,26],
+    ['5C1F22','ACCENT DIM','Hover/pressed','#9A9A9A',69.4,26],
+    ['F0EDE4','POLAROID','Card, paper surface','#5A5A5A',4.2,57],
+    ['F5F5F0','BG LIGHT','Content page bg','#5A5A5A',20.5,57],
+    ['5A5A5A','MUTED','Body text on light','#F5F5F0',36.8,57],
+    ['9A9A9A','SECONDARY','Captions on dark','#0A0A0A',53.1,57],
+    ['DEDAD0','BORDER LT','Dividers on light','#5A5A5A',69.4,57],
+  ].map(([hex,name,role,tc,x,y])=>`
+    ${R(x,y,'15%',28,`#${hex}`,'border:1px solid #1e1e1e')}
+    ${T(x+1,y+16,14,5,`#${hex}`,{size:1.6,color:tc})}
+    ${T(x,y+29,15,4,name,{size:1.8,bold:true,color:'#F5F5F0',spacing:.2})}
+    ${T(x,y+34,15,5,role,{size:1.7,color:'#9A9A9A',mono:false})}
+  `).join('')}
+  ${SNUM(7)}
+`);
+
+// 8 — TYPOGRAPHY & COMPONENTS
+slide('#F5F5F0', () => `
+  ${LABEL(4.2,4.5,'07 / Design System — Type & Components',true)}
+  ${T(4.2,10,70,17,'TYPOGRAPHY\n& COMPONENTS',{size:7.5,bold:true,color:'#0A0A0A',spacing:.3,lineH:1.0})}
+  ${HLINE(4.2,29,43,'#DEDAD0')}
+  ${[
+    ['DISPLAY','JetBrains Mono Bold','DUMCHTAX','var(--mono)',28,true,false,'#0A0A0A'],
+    ['HEADING','JetBrains Mono Bold','LP PLAYER','var(--mono)',18,true,false,'#0A0A0A'],
+    ['LABEL','JetBrains Mono Regular','ISO 800  ● REC','var(--mono)',11,false,false,'#0A0A0A'],
+    ['BODY','System UI Regular','무드가 음악이 되는 순간','var(--body)',13,false,false,'#0A0A0A'],
+    ['SCRIPT','Caveat Italic','Sun-Drenched','var(--script)',14,false,true,'#3A3835'],
+  ].map(([name,spec,sample,ff,sz,bold,italic,col],i)=>{
+    const y=33+i*12.5;
+    const scaledSz = sz/432*100*1.1;
+    return `
+      ${T(4.2,y+1,12,5,name,{size:1.8,color:'#9A9A9A',spacing:.2})}
+      <div class="t" style="left:16%;top:${y-1}%;width:30%;height:10%;
+        font-size:${scaledSz}cqh;font-family:${ff};font-weight:${bold?700:400};
+        font-style:${italic?'italic':'normal'};color:${col};overflow:hidden">${sample}</div>
+      ${T(50,y+1,20,5,spec,{size:1.7,color:'#9A9A9A',mono:false})}
+      ${HLINE(4.2,y+10.5,45,'#DEDAD0')}
+    `}).join('')}
+  ${HLINE(49,29,0.2,'#DEDAD0','height:68%')}
+  ${T(51,4.5,44,4,'KEY COMPONENTS',{size:1.8,color:'#9A9A9A',spacing:.3})}
+  ${POLAROID(51,10,18,18,{bg:'#D0CCC0',cap:'Golden Hour',shadow:false})}
+  ${T(72,13,25,4,'POLAROID CARD',{size:2.2,bold:true,color:'#0A0A0A'})}
+  ${T(72,19,24,16,'cream frame #F0EDE4\n16px padding\nscript caption font\nrandom tilt ±10°',{size:2,color:'#5A5A5A',mono:false,lineH:1.5})}
+  ${LP(51,48,18,'#B0ACA0')}
+  ${T(72,50,24,4,'LP DISC',{size:2.2,bold:true,color:'#0A0A0A'})}
+  ${T(72,56,24,16,'#0D0D0D vinyl\n중앙 이미지 회전\n1.8s/rev playing\npause = stop',{size:2,color:'#5A5A5A',mono:false,lineH:1.5})}
+  ${R(51,77,27,3,'#D0CCC0','border:1px solid #DEDAD0')}
+  ${R(51,74,0.2,9,'#A0A090')}
+  ${R(64,74,0.2,9,'#A0A090')}
+  ${R(77.7,74,0.2,9,'#A0A090')}
+  ${R(58.5,73,5.5,5,'#F0EDE4','border:1px solid #C0BCB0;box-shadow:1px 1px 4px rgba(0,0,0,.12)')}
+  ${DOT(60.2,75,1.3)}
+  ${T(80,75,16,4,'FADER NAV',{size:2.2,bold:true,color:'#0A0A0A'})}
+  ${T(80,81,16,14,'3 notch positions\nhaptic on pass\nsnap 300px/s\n1:1 content drag',{size:2,color:'#5A5A5A',mono:false,lineH:1.5})}
+  ${SNUM(8)}
+`);
+
+// 9 — USER FLOW
+slide('#F5F5F0', () => `
+  ${LABEL(4.2,4.5,'08 / User Flow',true)}
+  ${T(4.2,10,70,12,'3-PAGE FLOW',{size:8,bold:true,color:'#0A0A0A',spacing:.4})}
+  ${HLINE(4.2,22,92,'#DEDAD0')}
+  ${[
+    {name:'HOME',icon:'⌂',bg:'#1A2030',steps:['CHOOSE PHOTO\nor TAKE PHOTO','셔터 플래시\n폴라로이드 인화','Gemini API\n무드 분석'],x:4.2},
+    {name:'PLAYER',icon:'◉',bg:'#1A1A0A',steps:['LP 회전 시작\n페이더 이동','♡ 탭 → 저장\n음악 재생 중','PREV / NEXT\n볼륨 페이더'],x:35.7},
+    {name:'LIBRARY',icon:'▣',bg:'#1A1A2A',steps:['폴라로이드 낙하\n보드에 저장','카드 탭 →\n재생 복원','REC PLAYBACK\nLOG 리셔플'],x:67.2},
+  ].map(({name,icon,bg,steps,x})=>`
+    ${R(x,25,28,70,'#E5E2D8','border:1px solid #DEDAD0;border-radius:2%')}
+    ${R(x+1.4,27,25.2,66,bg,'border-radius:1.5%')}
+    ${T(x,28,28,6,icon,{size:4,color:'#F5F5F0',align:'center'})}
+    ${T(x,35,28,6,name,{size:2.8,bold:true,color:'#F5F5F0',spacing:.5,align:'center'})}
+    ${steps.map((step,si)=>{
+      const sy=43+si*17;
+      return `${R(x+2,sy,24,14,'rgba(255,255,255,.06)')}
+        ${T(x+2.3,sy+1,3,5,`${si+1}`,{size:2,bold:true,color:'#913439'})}
+        ${T(x+5.5,sy+2,19,12,step,{size:2,color:'#F5F5F0',mono:false,lineH:1.35})}`;
+    }).join('')}
+    ${[0,1,2].map((d,di)=>C(x+11.5+di*2.5,91,di===(['HOME','PLAYER','LIBRARY'].indexOf(name))?1.4:0.9,di===(['HOME','PLAYER','LIBRARY'].indexOf(name))?'#913439':'#8A8A8A')).join('')}
+  `).join('')}
+  ${T(32.5,55,3,7,'→',{size:5,color:'#913439',align:'center'})}
+  ${T(32.5,63,3,6,'FADER\nSNAP',{size:1.5,color:'#9A9A9A',align:'center',lineH:1.2})}
+  ${T(64,55,3,7,'→',{size:5,color:'#913439',align:'center'})}
+  ${T(64,63,3,6,'FADER\nSNAP',{size:1.5,color:'#9A9A9A',align:'center',lineH:1.2})}
+  ${SNUM(9)}
+`);
+
+// 10 — HOME SCREEN
+slide('#0A0A0A', () => `
+  ${LABEL(4.2,4.5,'09 / Key Screen — HOME')}
+  ${T(4.2,10,38,12,'HOME',{size:9,bold:true,spacing:.5})}
+  ${T(4.2,23,54,5,'CAPTURE THE MOMENT',{size:2.2,color:'#913439',spacing:.35})}
+  ${HLINE(4.2,30,92)}
+  ${CAM(4,33,24,40)}
+  ${T(29.5,48,5,8,'→',{size:6,color:'#913439',align:'center'})}
+  ${POLAROID(35.5,32,20,22,{bg:'#253045',cap:'Mood: Nostalgic'})}
+  ${[
+    ['ISO 800 ● REC','카메라 스테이터스 레이블 — 아날로그 카메라 감성',32],
+    ['SHUTTER FLASH','촬영 시 화면 전체 플래시 → 폴라로이드 슬롯 배출 애니메이션',44],
+    ['필름 인화 애니메이션','흑백 → 컬러 + blur 해제 + grain 페이드 (약 2.4초)',56],
+    ['CHOOSE / TAKE PHOTO','갤러리 선택 or 카메라 촬영 듀얼 입력 방식',68],
+  ].map(([title,desc,y])=>`
+    ${DOT(58.5,y+1,1.1)}
+    ${T(60.5,y,37,5,title,{size:2.2,bold:true})}
+    ${T(60.5,y+5.5,37,7,desc,{size:2,color:'#8A8A8A',mono:false,lineH:1.35})}
+    ${HLINE(60.5,y+12,37,'#2C2C2C')}
+  `).join('')}
+  ${R(4.2,80,92,14,'#141414','border:1px solid #2C2C2C')}
+  ${['PHOTO','→','GEMINI VISION','→','MOOD KEYWORDS','→','YOUTUBE SEARCH'].map((f,i)=>
+    T(5.5+i*13,82.5,12,8,f,{size:i%2===1?4:1.8,bold:i%2!==1,color:i%2===1?'#913439':'#F5F5F0',align:'center'})
+  ).join('')}
+  ${SNUM(10)}
+`);
+
+// 11 — PLAYER SCREEN
+slide('#0A0A0A', () => `
+  ${LABEL(4.2,4.5,'10 / Key Screen — PLAYER')}
+  ${T(4.2,10,38,12,'PLAYER',{size:9,bold:true,spacing:.5})}
+  ${T(4.2,23,54,5,'THE MUSIC STARTS',{size:2.2,color:'#913439',spacing:.35})}
+  ${HLINE(4.2,30,92)}
+  ${C(4,29,36,'#5C1F22','opacity:.15')}
+  ${LP(5,32,32,'#30404A')}
+  ${POLAROID(16.5,57,16,15,{bg:'#253040',cap:'IU — 밤편지',rot:3})}
+  ${T(8,88,32,6,'⏮  ▶  ⏭',{size:4,align:'center'})}
+  ${[
+    ['LP 회전 애니메이션','재생 시 1.8s/rev 시계방향 회전. 일시정지 시 즉시 정지. 중앙 썸네일도 함께 회전.',32],
+    ['ACCENT GLOW','LP 뒤에 accent 색상 glow 효과. 음악이 켜진 상태임을 공간으로 표현.',44],
+    ['♡ HEART BUTTON','폴라로이드 우측 상단 빈 하트. 저장 시 #913439 fill. 다시 탭하면 저장 취소.',56],
+    ['VOLUME FADER','수직 페이더로 볼륨 조절. YouTube IFrame API volume() 연동.',68],
+    ['오디오 전용 재생','YouTube IFrame을 -400px 오프스크린 배치. 화면은 LP + 폴라로이드만 보임.',80],
+  ].map(([title,desc,y])=>`
+    ${DOT(42,y+1,1.1)}
+    ${T(44,y,52,5,title,{size:2.2,bold:true})}
+    ${T(44,y+5.5,52,7,desc,{size:2,color:'#8A8A8A',mono:false,lineH:1.35})}
+    ${HLINE(44,y+12,52,'#2C2C2C')}
+  `).join('')}
+  ${SNUM(11)}
+`);
+
+// 12 — LIBRARY SCREEN
+slide('#0A0A0A', () => `
+  ${LABEL(4.2,4.5,'11 / Key Screen — LIBRARY')}
+  ${T(4.2,10,55,12,'LIBRARY',{size:9,bold:true,spacing:.5})}
+  ${T(4.2,23,54,5,'SCATTERED MEMORIES',{size:2.2,color:'#913439',spacing:.35})}
+  ${HLINE(4.2,30,92)}
+  ${[
+    {x:3,y:31,w:18,h:17,bg:'#2A3545',cap:'밤편지',rot:-8},
+    {x:16,y:37,w:17,h:15,bg:'#352535',cap:'우주를 줄게',rot:5},
+    {x:27,y:30,w:19,h:17,bg:'#45352A',cap:'BOYHOOD',rot:-3},
+    {x:7,y:56,w:16,h:14,bg:'#253535',cap:'위잉위잉',rot:7},
+    {x:19,y:62,w:17,h:15,bg:'#303045',cap:'기억을걷는시간',rot:-4},
+  ].map(({x,y,w,h,bg,cap,rot})=>POLAROID(x,y,w,h,{bg,cap,rot})).join('')}
+  ${[
+    ['랜덤 배치 & 자유 드래그','각 카드는 랜덤 각도·위치로 배치. 손가락으로 자유롭게 이동 가능. 위치는 localStorage 영속.',32],
+    ['TAP → 재생 복원','카드 탭 시 저장된 사진 + 음악 조합 그대로 PLAYER 화면으로 이동 & 재생.',44],
+    ['♡ 저장 토글','저장 후 다시 하트 탭 → 라이브러리에서 삭제. 중복 저장 방지 로직 내장.',56],
+    ['REC PLAYBACK LOG','버튼 탭 시 카드 위치/각도 리셔플. 기록이 흩어진 추억처럼 재구성됨.',68],
+  ].map(([title,desc,y])=>`
+    ${DOT(46,y+1,1.1)}
+    ${T(48,y,48,5,title,{size:2.2,bold:true})}
+    ${T(48,y+5.5,48,7,desc,{size:2,color:'#8A8A8A',mono:false,lineH:1.35})}
+    ${HLINE(48,y+12,48,'#2C2C2C')}
+  `).join('')}
+  ${R(3,82,44,7,'#141414','border:1px solid #2C2C2C')}
+  ${DOT(4.5,84.5,1.2)}
+  ${T(7,83.5,38,5,'REC PLAYBACK LOG',{size:1.8,color:'#9A9A9A',spacing:.3})}
+  ${SNUM(12)}
+`);
+
+// 13 — FADER NAV
+slide('#F5F5F0', () => `
+  ${LABEL(4.2,4.5,'12 / Interaction — Fader Navigation',true)}
+  ${T(4.2,10,70,17,'ANALOG FADER\nNAVIGATION',{size:7.5,bold:true,color:'#0A0A0A',spacing:.3,lineH:1.0})}
+  ${HLINE(4.2,29,92,'#DEDAD0')}
+  ${['HOME (0%)', 'PLAYER (50%)', 'LIBRARY (100%)'].map((label,si)=>{
+    const y=33+si*19; const knobX=4.2+si*13.5;
+    return `
+      ${R(4.2,y+2,27,2.5,'#D8D5CC','border:1px solid #DEDAD0')}
+      ${[0,13.5,27].map((nx,ni)=>R(4.2+nx,y-0.5,0.2,5.5,ni===si?'#913439':'#A0A090')).join('')}
+      ${R(knobX-2.2,y-0.5,4.5,5.5,'#F0EDE4','border:1px solid #C0BCB0;box-shadow:1px 1px 4px rgba(0,0,0,.08)')}
+      ${DOT(knobX-0.4,y+1,1.2)}
+      ${T(35,y+1,30,5,label,{size:2.4,bold:true,color:'#0A0A0A'})}
+      ${['HOME','PLAYER','LIBRARY'].map((l,li)=>T(4.2+li*13.5-1.5,y+6,6,4,l,{size:1.6,color:li===si?'#913439':'#9A9A9A',spacing:.1,align:'center'})).join('')}
+    `}).join('')}
+  ${[
+    ['◈','1:1 드래그 동기화','페이더 드래그와 콘텐츠 스크롤이 동일 비율로 연동됩니다. 자연스러운 물리 피드백.'],
+    ['◉','눈금 통과 햅틱','navigator.vibrate(30)으로 노치 통과 시 진동. 아날로그 믹서의 클릭 감을 재현.'],
+    ['◫','자석 스냅 300px/s','손을 떼면 가장 가까운 위치로 스냅. 플리킹 속도 300px/s 이상이면 다음 탭으로.'],
+    ['◬','레이블 weight 보간','현재 활성 탭 레이블은 bold, 나머지는 normal. 드래그 중 실시간 보간.'],
+  ].map(([sym,title,desc],i)=>{
+    const x=59.5, y=31+i*16.5;
+    return `
+      ${R(x,y,37.5,14,i%2===0?'#EDEAE0':'#F0EDE4','border:1px solid #DEDAD0')}
+      ${T(x+1.5,y+1.5,5,8,sym,{size:3.8,color:'#913439'})}
+      ${T(x+6,y+2,30,5,title,{size:2.4,bold:true,color:'#0A0A0A'})}
+      ${T(x+6,y+7,30,7,desc,{size:2,color:'#5A5A5A',mono:false,lineH:1.4})}
+    `}).join('')}
+  ${HLINE(4.2,96,'#DEDAD0',92)}
+  ${T(4.2,97,92,4,'navigator.vibrate(30)  →  노치 통과        navigator.vibrate([50,30,50])  →  스냅 착지',{size:1.7,color:'#9A9A9A',spacing:.15})}
+  ${SNUM(13)}
+`);
+
+// 14 — MICRO-INTERACTIONS
+slide('#F5F5F0', () => `
+  ${LABEL(4.2,4.5,'13 / Micro-Interactions',true)}
+  ${T(4.2,10,70,17,'MICRO-ANIMATIONS\n& INTERACTIONS',{size:7.5,bold:true,color:'#0A0A0A',spacing:.3,lineH:1.0})}
+  ${HLINE(4.2,29,92,'#DEDAD0')}
+  ${R(4.2,30,92,7,'#5C1F22')}
+  ${['INTERACTION','TRIGGER','ANIMATION','PURPOSE'].map((h,i)=>
+    T(5.5+i*22.5,31,21,5,h,{size:1.9,bold:true,color:'#fff',spacing:.25})
+  ).join('')}
+  ${[
+    ['폴라로이드 인화','사진 선택/촬영','플래시 → 토출 → 흑백→컬러 + blur + grain','기대감 형성, 느림의 미학'],
+    ['LP 회전','재생 시작','1.8s/rev CW rotate, pause = stop','음악 재생 상태 시각화'],
+    ['폴라로이드 낙하','♡ 탭 저장','중력+bounce 물리 드롭, --angle 기울기','저장의 물성 피드백'],
+    ['하트 팝 애니메이션','저장 완료','scale 1→1.4→1 + fill 색상 전환 300ms','감정적 긍정 강화'],
+    ['셔터 플래시','촬영 버튼','화면 전체 #FFF 0.3s 페이드','카메라 실감'],
+    ['노치 햅틱','페이더 드래그','navigator.vibrate(30)','아날로그 촉각 피드백'],
+    ['스냅 착지 햅틱','페이더 손 뗌','navigator.vibrate([50,30,50])','탭 전환 완료 확인'],
+    ['토스트 메시지','저장/삭제 액션','bottom slide-up + fade 2s auto-dismiss','상태 변화 명확한 피드백'],
+  ].map((row,ri)=>{
+    const y=37+ri*7.5;
+    const bg=ri%2===0?'#F0EDE4':'#EAEAE0';
+    return `${R(4.2,y,92,7.2,bg)}
+      ${row.map((cell,ci)=>T(5.5+ci*22.5,y+1,21,5.5,cell,{size:ci===0?2:1.85,bold:ci===0,color:ci===0?'#0A0A0A':'#5A5A5A',mono:ci<2,lineH:1.3})).join('')}
+    `}).join('')}
+  ${SNUM(14)}
+`);
+
+// 15 — TECH STACK
+slide('#0A0A0A', () => `
+  ${LABEL(4.2,4.5,'14 / Technical Architecture')}
+  ${T(4.2,10,70,12,'TECH STACK',{size:8.5,bold:true,spacing:.4})}
+  ${T(4.2,23,70,5,'VANILLA FIRST · ZERO DEPENDENCY',{size:2,color:'#913439',spacing:.35})}
+  ${HLINE(4.2,30,92)}
+  ${[
+    {layer:'FRONTEND',bg:'#1C2832',items:[
+      {n:'HTML5',d:'Semantic markup, 3 pages, no framework'},
+      {n:'CSS3',d:'Custom properties, keyframes, pointer events'},
+      {n:'Vanilla JS',d:'ES6+, no bundler, ~700 lines'},
+    ]},
+    {layer:'AI / ANALYSIS',bg:'#1E1E0A',items:[
+      {n:'Gemini 2.5 Flash',d:'Photo mood extraction, music query generation'},
+      {n:'Gemini 2.0 Flash',d:'Fallback model (429 rate limit short-circuit)'},
+    ]},
+    {layer:'MEDIA / PLAYBACK',bg:'#1E0A0A',items:[
+      {n:'YouTube Data API v3',d:'Music search (videoCategoryId=10, embeddable)'},
+      {n:'YouTube IFrame API',d:'Audio-only playback (player off-screen -400px)'},
+    ]},
+    {layer:'PERSISTENCE',bg:'#0A1E1E',items:[
+      {n:'localStorage',d:'Library cards, API keys, card positions'},
+      {n:'CSS Variables',d:'--angle, --color-* design tokens runtime'},
+    ]},
+  ].map(({layer,bg,items},li)=>{
+    const x=4.2+li*24;
+    return `
+      ${R(x,33,22.5,6,bg,'border:1px solid #2C2C2C')}
+      ${T(x+1,33.5,21,5,layer,{size:1.7,bold:true,color:'#913439',spacing:.25})}
+      ${items.map(({n,d},ii)=>`
+        ${R(x,39+ii*20,22.5,18,'#141414','border:1px solid #2C2C2C')}
+        ${T(x+1.2,40+ii*20,20,6,n,{size:2.4,bold:true})}
+        ${T(x+1.2,47+ii*20,20,9,d,{size:1.9,color:'#8A8A8A',mono:false,lineH:1.4})}
+      `).join('')}
+    `}).join('')}
+  ${[24,48,72].map(ax=>T(ax-0.5,51,4,6,'→',{size:5,color:'#913439',align:'center'})).join('')}
+  ${HLINE(4.2,80,92,'#2C2C2C')}
+  ${T(4.2,82,30,4,'KEY DESIGN DECISIONS',{size:1.8,color:'#9A9A9A',spacing:.25})}
+  ${[
+    {d:'No framework',r:'배포 복잡도 최소화, 정적 서버 즉시 실행',x:4.2},
+    {d:'Audio-only IFrame',r:'YouTube 영상 표시 없이 음악만 재생',x:35.5},
+    {d:'Dual API fallback',r:'2.5-flash → 2.0-flash 자동 폴백 + 데모 모드',x:66.8},
+  ].map(({d,r,x})=>`
+    ${DOT(x,87.5,1.1)}
+    ${T(x+2,87,24,5,d,{size:2.2,bold:true})}
+    ${T(x+2,92.5,27,7,r,{size:2,color:'#8A8A8A',mono:false,lineH:1.35})}
+  `).join('')}
+  ${SNUM(15)}
+`);
+
+// 16 — KPI
+slide('#F5F5F0', () => `
+  ${LABEL(4.2,4.5,'15 / KPI & Success Metrics',true)}
+  ${T(4.2,10,70,12,'SUCCESS METRICS',{size:8,bold:true,color:'#0A0A0A',spacing:.3})}
+  ${HLINE(4.2,22,92,'#DEDAD0')}
+  ${[
+    {num:'< 3s',label:'ANALYSIS TIME',desc:'Gemini 무드 분석 완료 목표\n(현재 avg 1.8s)',p:'P0',x:4.2},
+    {num:'90%',label:'MOOD MATCH',desc:'분석된 무드와 재생 음악의\n감성 일치 만족도 목표',p:'P0',x:28.2},
+    {num:'70%',label:'SAVE RATE',desc:'재생 이후 폴라로이드 저장\n전환율 목표',p:'P1',x:52.2},
+    {num:'2.0+',label:'REPLAYS/CARD',desc:'저장된 카드 재재생 평균\n횟수 목표',p:'P1',x:76.2},
+  ].map(({num,label,desc,p,x})=>`
+    ${R(x,25,20,56,x<=28?'#F0EDE4':'#EAEAE0','border:1px solid #DEDAD0')}
+    ${R(x,25,20,7,p==='P0'?'#913439':'#5C1F22')}
+    ${T(x,25,20,7,p,{size:2,bold:true,color:'#fff',align:'center',spacing:.2})}
+    ${T(x,31,20,22,num,{size:11,bold:true,color:'#913439',align:'center'})}
+    ${T(x,52,20,5,label,{size:2,bold:true,color:'#0A0A0A',align:'center',spacing:.2})}
+    ${T(x+1,57,18,12,desc,{size:1.9,color:'#5A5A5A',mono:false,align:'center',lineH:1.4})}
+  `).join('')}
+  ${HLINE(4.2,84,'#DEDAD0',92)}
+  ${T(4.2,86,25,4,'UX QUALITY GOALS',{size:1.9,color:'#9A9A9A',spacing:.25,mono:true})}
+  ${[
+    '첫 사용 30초 내 음악 재생 도달 (Zero Config Path)',
+    '폴라로이드 드롭 애니메이션 이질감 없이 자연스럽게 (Delight Quality)',
+    'API 키 없이도 데모 모드로 핵심 경험 전달 (Resilient UX)',
+    'Library 카드 재재생 시 "그때 그 기분" 감성 재현 (Emotional Continuity)',
+  ].map((g,i)=>DOT(4.2,90+i*2.6,1)+T(6.2,89.5+i*2.6,90,3,g,{size:2,color:'#5A5A5A',mono:false})).join('')}
+  ${SNUM(16)}
+`);
+
+// 17 — CLOSING
+slide('#0A0A0A', () => `
+  ${R(0,0,100,0.7,'#913439')}
+  ${T(4.2,13,72,40,'"사진 한 장이\n음악이 되는 순간"',{size:12.5,bold:true,lineH:1.1,spacing:.02})}
+  ${T(4.2,55,60,6,'— Dumchtax Player, 2025',{size:2.6,italic:true,color:'#8A8A8A'})}
+  ${HLINE(4.2,65,92)}
+  ${T(4.2,68,55,8,'윤다빈  /  YUNDABIN',{size:4.2,spacing:.15})}
+  ${T(4.2,78,35,5,'UX · UI DESIGNER',{size:2.2,color:'#913439',spacing:.4})}
+  ${DOT(4.2,85.5,1.2)}
+  ${T(6.5,84.5,65,4,'GITHUB  ·  github.com/manybean916/dumchtax.player',{size:2,color:'#9A9A9A'})}
+  ${POLAROID(70,8,22,22,{bg:'#30404A',cap:'Scattered Memories',rot:-6})}
+  ${POLAROID(74,26,20,20,{bg:'#402830',cap:'Golden Hour',rot:8})}
+  ${POLAROID(71,50,21,19,{bg:'#2A3040',cap:'밤편지',rot:-3})}
+  ${R(0,98.5,100,1.5,'#5C1F22')}
+  ${T(35,96,30,4,'DUMCHTAX PLAYER',{size:1.6,color:'#2C2C2C',align:'center',spacing:.3})}
+`);
+
+/* ════════════════════════════════
+   RENDER ENGINE
+════════════════════════════════ */
+let current = 0;
+const viewer = document.getElementById('viewer');
+
+function render() {
+  viewer.innerHTML = '';
+  const { bg, fn } = slides[current];
+  const div = document.createElement('div');
+  div.className = 'slide';
+  div.style.background = bg;
+  div.innerHTML = `<div class="slide-inner">${fn()}</div>`;
+  viewer.appendChild(div);
+}
+
+function go(n) {
+  current = ((n % slides.length) + slides.length) % slides.length;
+  render();
+  document.getElementById('counter').textContent = `${current+1} / ${slides.length}`;
+}
+function next() { go(current + 1); }
+function prev() { go(current - 1); }
+function toggleThumb() { document.body.classList.toggle('show-thumbs'); }
+function toggleFS() { document.body.classList.toggle('fs'); }
+
+document.addEventListener('keydown', e => {
+  if (e.key==='ArrowRight'||e.key==='ArrowDown') next();
+  if (e.key==='ArrowLeft'||e.key==='ArrowUp') prev();
+  if (e.key==='f'||e.key==='F') toggleFS();
+  if (e.key==='Escape') document.body.classList.remove('fs');
+});
+
+// Touch swipe
+let tx=0;
+viewer.addEventListener('touchstart',e=>tx=e.changedTouches[0].clientX,{passive:true});
+viewer.addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-tx;
+  if(Math.abs(dx)>50){dx<0?next():prev();}
+});
+
+go(0);
+</script>
+</body>
+</html>
