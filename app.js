@@ -304,10 +304,6 @@ function resetHomeAfter() {
 
 /* ---------------- Gemini vision analysis ---------------- */
 async function analyzePhoto(dataUrl) {
-  if (!settings.geminiKey) {
-    await new Promise((r) => setTimeout(r, 900)); // demo-mode pacing
-    return fallbackAnalysis();
-  }
   const base64 = dataUrl.split(",")[1];
   const body = {
     contents: [{
@@ -325,7 +321,21 @@ Respond with ONLY a JSON object, no markdown fences:
       ],
     }],
   };
-  // try models in order — 2.0-flash first, fall back to 1.5-flash
+
+  // 개인 키가 있으면 브라우저에서 Google 직접 호출, 없으면 서버 프록시(/api/gemini) 경유.
+  const data = settings.geminiKey
+    ? await geminiDirect(body)
+    : await geminiProxy(body);
+
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  const json = text.replace(/```json|```/g, "").trim();
+  const parsed = JSON.parse(json);
+  if (!parsed.musicQuery) throw new Error("no musicQuery");
+  return parsed;
+}
+
+// 사용자 개인 키로 Google 직접 호출 — 2.5-flash → 2.0-flash 폴백
+async function geminiDirect(body) {
   const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
   let res, lastStatus;
   for (const model of models) {
@@ -338,12 +348,18 @@ Respond with ONLY a JSON object, no markdown fences:
     if (res.status === 429) throw new Error("Gemini API 429"); // rate-limit — don't try next model
   }
   if (!res.ok) throw new Error("Gemini API " + lastStatus);
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  const json = text.replace(/```json|```/g, "").trim();
-  const parsed = JSON.parse(json);
-  if (!parsed.musicQuery) throw new Error("no musicQuery");
-  return parsed;
+  return res.json();
+}
+
+// 서버에 숨긴 키로 호출하는 프록시 — 키 미설정(503)/실패 시 throw → 호출부가 데모로 폴백
+async function geminiProxy(body) {
+  const res = await fetch("/api/gemini", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+  });
+  if (!res.ok) throw new Error("Gemini proxy " + res.status);
+  return res.json();
 }
 
 function fallbackAnalysis() {
@@ -376,18 +392,13 @@ function audioScore(title, channel) {
 }
 
 async function findTracks(analysis) {
-  if (!settings.youtubeKey) {
-    toast("YouTube API 키가 없어 데모 트랙을 재생합니다 (⚙️ 설정에서 키 입력)");
-    return DEMO_TRACKS.map((t) => ({ ...t }));
-  }
   try {
     // "audio"를 덧붙여 음원 업로드(Topic/Official Audio)가 상위에 오도록 검색
-    const q = encodeURIComponent(analysis.musicQuery + " audio");
-    const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&videoEmbeddable=true&maxResults=12&q=${q}&key=${encodeURIComponent(settings.youtubeKey)}`
-    );
-    if (!res.ok) throw new Error("YouTube API " + res.status);
-    const data = await res.json();
+    const query = analysis.musicQuery + " audio";
+    // 개인 키 있으면 직접 호출, 없으면 서버 프록시(/api/youtube) 경유
+    const data = settings.youtubeKey
+      ? await youtubeDirect(query)
+      : await youtubeProxy(query);
     const items = (data.items || []).filter((i) => i.id?.videoId);
     if (!items.length) throw new Error("no results");
     return items
@@ -406,6 +417,23 @@ async function findTracks(analysis) {
     toast("음원 검색에 실패했어요. 유사한 무드의 대체 음원으로 전환합니다.");
     return DEMO_TRACKS.map((t) => ({ ...t }));
   }
+}
+
+// 사용자 개인 키로 Google 직접 호출
+async function youtubeDirect(query) {
+  const q = encodeURIComponent(query);
+  const res = await fetch(
+    `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&videoEmbeddable=true&maxResults=12&q=${q}&key=${encodeURIComponent(settings.youtubeKey)}`
+  );
+  if (!res.ok) throw new Error("YouTube API " + res.status);
+  return res.json();
+}
+
+// 서버에 숨긴 키로 호출하는 프록시 — 키 미설정(503)/실패 시 throw → 데모로 폴백
+async function youtubeProxy(query) {
+  const res = await fetch(`/api/youtube?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error("YouTube proxy " + res.status);
+  return res.json();
 }
 
 function decodeHtml(s) {

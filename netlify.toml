@@ -1,0 +1,17 @@
+# Netlify 배포 설정
+# 정적 파일은 저장소 루트에서 서빙하고, /api/* 는 서버리스 함수로 프록시한다.
+
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# 브라우저는 /api/gemini, /api/youtube 로 호출 → 실제 함수로 라우팅
+[[redirects]]
+  from = "/api/gemini"
+  to = "/.netlify/functions/gemini"
+  status = 200
+
+[[redirects]]
+  from = "/api/youtube"
+  to = "/.netlify/functions/youtube"
+  status = 200
