@@ -187,6 +187,22 @@ body { font-family: var(--font-mono); color: var(--color-ink); overscroll-behavi
   letter-spacing: 0.04em;
 }
 .home-status.active { color: var(--color-accent); }
+/* animated "..." — dots bounce up one at a time while analyzing */
+.status-dots {
+  display: inline-flex; align-items: flex-end; gap: 2.5px;
+  margin-left: 3px; height: 1em;
+}
+.status-dots i {
+  width: 3.5px; height: 3.5px; margin-bottom: 1px;
+  border-radius: 50%; background: currentColor;
+  animation: statusdot 1.1s infinite ease-in-out both;
+}
+.status-dots i:nth-child(2) { animation-delay: 0.16s; }
+.status-dots i:nth-child(3) { animation-delay: 0.32s; }
+@keyframes statusdot {
+  0%, 62%, 100% { transform: translateY(0); opacity: 0.4; }
+  31% { transform: translateY(-6px); opacity: 1; }
+}
 
 /* Buttons */
 .btn-outline, .btn-filled {
@@ -362,7 +378,7 @@ body { font-family: var(--font-mono); color: var(--color-ink); overscroll-behavi
 }
 /* animation lives on the base element, paused — toggling .spinning only
    flips play-state, so the disc freezes in place instead of snapping back */
-.lp-disc { animation: lpspin 1.8s linear infinite; animation-play-state: paused; }
+.lp-disc { animation: lpspin 3.2s linear infinite; animation-play-state: paused; }
 .lp-disc.spinning { animation-play-state: running; }
 @keyframes lpspin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
 
@@ -514,71 +530,41 @@ body { font-family: var(--font-mono); color: var(--color-ink); overscroll-behavi
 /* ============ PAGE 3 : LIBRARY ============ */
 .page-library { display: flex; flex-direction: column; padding-top: var(--space-md); }
 
-/* gallery picture light */
-.gallery-lamp {
+/* photo output slot — saved polaroids appear to print out from here */
+.output-slot {
   position: relative;
-  height: 44px; flex: 0 0 44px;
-  display: flex; justify-content: center;
+  height: 30px; flex: 0 0 30px;
+  display: flex; justify-content: center; align-items: flex-end;
   z-index: 6;
 }
-.lamp-bracket {
-  position: absolute; top: 14px;
-  width: 26px; height: 26px;
-  background: linear-gradient(150deg, #2c2c2c, #111);
-  border-radius: 3px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.35);
-}
-.lamp-bar {
-  position: absolute; top: 10px;
-  width: 74%; height: 15px;
-  background: linear-gradient(#3a3a3a 0%, #1c1c1c 40%, #0c0c0c 100%);
-  border-radius: 6px;
+/* the device face plate the slot is cut into */
+.slot-face {
+  position: relative;
+  width: 88%; height: 22px;
+  background: linear-gradient(#e9e7de 0%, #dedcd2 55%, #d3d1c6 100%);
+  border-radius: 5px 5px 3px 3px;
   box-shadow:
-    0 5px 12px rgba(0,0,0,0.32),
-    inset 0 1px 1px rgba(255,255,255,0.22),
-    inset 0 -1px 1px rgba(0,0,0,0.6);
+    inset 0 1px 1px rgba(255,255,255,0.7),
+    inset 0 -2px 4px rgba(0,0,0,0.12),
+    0 2px 6px rgba(0,0,0,0.14);
+  display: flex; justify-content: center; align-items: center;
 }
-/* machined end caps */
-.lamp-bar::before, .lamp-bar::after {
-  content: ""; position: absolute; top: 1px; bottom: 1px;
-  width: 7px; border-radius: 5px;
-  background: linear-gradient(#4a4a4a, #181818);
-  box-shadow: inset 0 1px 1px rgba(255,255,255,0.25);
-}
-.lamp-bar::before { left: 1px; }
-.lamp-bar::after  { right: 1px; }
-/* neutral-white LED strip on the underside */
-.lamp-strip {
-  position: absolute; left: 4%; right: 4%; bottom: 1.5px;
-  height: 4px; border-radius: 2px;
-  background:
-    linear-gradient(rgba(255,255,255,0.55), rgba(255,255,255,0) 60%),
-    repeating-linear-gradient(90deg,
-      #ffffff 0 5px, #dfe3e6 5px 9px);
+/* the dark recessed opening */
+.slot-mouth {
+  position: relative;
+  width: 182px; height: 8px;
+  background: linear-gradient(#0d0d0d 0%, #000 50%, #0b0b0b 100%);
+  border-radius: 5px;
   box-shadow:
-    0 1px 4px rgba(255,255,255,0.9),
-    0 4px 14px rgba(244,247,250,0.55);
+    inset 0 2px 4px rgba(0,0,0,0.95),
+    inset 0 -1px 1px rgba(255,255,255,0.08),
+    0 1px 0 rgba(255,255,255,0.85); /* bright lower lip catching light */
 }
-/* diffuser glass hint under the strip */
-.lamp-strip::after {
-  content: ""; position: absolute; left: -1%; right: -1%; top: 100%;
-  height: 2px; border-radius: 1px;
-  background: linear-gradient(rgba(255,255,255,0.5), transparent);
-}
-/* light pooling down the wall — cool white */
-.lamp-glow {
-  position: absolute; top: 24px; left: 50%;
-  transform: translateX(-50%);
-  width: 96%; height: 44%;
-  background:
-    radial-gradient(ellipse 38% 30% at 50% 0%,
-      rgba(255,255,255,0.5) 0%, transparent 100%),
-    radial-gradient(ellipse 58% 100% at 50% 0%,
-      rgba(250,251,252,0.42) 0%,
-      rgba(248,250,251,0.16) 48%,
-      transparent 75%);
-  pointer-events: none;
-  z-index: 1;
+/* subtle roller sheen inside the opening */
+.slot-mouth::before {
+  content: ""; position: absolute; left: 10px; right: 10px; top: 2px;
+  height: 1.5px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent);
 }
 .library-board { flex: 1; position: relative; overflow: hidden; z-index: 2; }
 
@@ -607,26 +593,27 @@ body { font-family: var(--font-mono); color: var(--color-ink); overscroll-behavi
   outline: 1.5px solid rgba(145,52,57,0.8);
   box-shadow: 0 0 16px rgba(145,52,57,0.3), 0 12px 32px rgba(0,0,0,0.6);
 }
-.memory-card.dropping { animation: drop 680ms both; }
+.memory-card.dropping { animation: drop 720ms both; }
 @keyframes drop {
-  0% {
-    transform: translateY(-520px) rotate(calc(var(--angle, 0deg) - 16deg)) scale(1.08);
+  0% { /* emerging from the output slot (top-center) */
+    transform: translate(var(--drop-x, 0px), var(--drop-y, -520px))
+               rotate(calc(var(--angle, 0deg) - 10deg)) scale(1.06);
     opacity: 0;
     box-shadow: 0 40px 60px rgba(0,0,0,0.15);
-    animation-timing-function: cubic-bezier(0.5, 0, 0.85, 0.4); /* accelerating fall */
+    animation-timing-function: cubic-bezier(0.45, 0, 0.7, 0.5); /* slides out & falls */
   }
-  12% { opacity: 1; }
-  58% { /* impact — slight overshoot past resting point */
-    transform: translateY(12px) rotate(calc(var(--angle, 0deg) + 4deg)) scale(1);
+  10% { opacity: 1; }
+  60% { /* impact — slight overshoot past resting point */
+    transform: translate(0, 12px) rotate(calc(var(--angle, 0deg) + 4deg)) scale(1);
     box-shadow: 0 4px 12px var(--color-polaroid-shadow);
     animation-timing-function: ease-out;
   }
   80% {
-    transform: translateY(-5px) rotate(var(--angle, 0deg));
+    transform: translate(0, -5px) rotate(var(--angle, 0deg));
     animation-timing-function: ease-in;
   }
   100% {
-    transform: translateY(0) rotate(var(--angle, 0deg));
+    transform: translate(0, 0) rotate(var(--angle, 0deg));
     box-shadow: 0 8px 24px var(--color-polaroid-shadow), 0 2px 6px rgba(0,0,0,0.3);
   }
 }

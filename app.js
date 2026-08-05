@@ -217,8 +217,18 @@ function compressImage(dataUrl, maxSize) {
 }
 
 function setStatus(text, active) {
-  homeStatus.textContent = text;
   homeStatus.classList.toggle("active", !!active);
+  // 진행 중(active) 상태에서 끝의 "..."을 개별 점으로 렌더 → 하나씩 통통 튀는 애니메이션
+  const m = active ? text.match(/^(.*?)(\.{2,})$/) : null;
+  if (m) {
+    homeStatus.textContent = m[1]; // 안전하게 텍스트로 먼저 세팅
+    const dots = document.createElement("span");
+    dots.className = "status-dots";
+    for (let i = 0; i < m[2].length; i++) dots.appendChild(document.createElement("i"));
+    homeStatus.appendChild(dots);
+  } else {
+    homeStatus.textContent = text;
+  }
 }
 
 async function startPrintFlow(dataUrl) {
@@ -705,13 +715,10 @@ function renderLibrary(dropId) {
   const bh = board.clientHeight || 480;
   state.library.forEach((card, i) => {
     let el = board.querySelector(`[data-id="${card.id}"]`);
-    if (!el) {
+    const isNew = !el;
+    if (isNew) {
       el = buildCardEl(card);
       board.appendChild(el);
-      if (card.id === dropId) {
-        el.classList.add("dropping");
-        setTimeout(() => el.classList.remove("dropping"), 700);
-      }
     }
     if (!card.position) {
       card.position = {
@@ -724,6 +731,17 @@ function renderLibrary(dropId) {
     el.style.setProperty("--angle", card.polaroidAngle + "deg");
     el.style.transform = `rotate(${card.polaroidAngle}deg)`;
     el.style.zIndex = 10 + i;
+
+    // just-saved card: start at the output slot (top-center) and slide to its spot
+    if (isNew && card.id === dropId) {
+      const cardW = el.offsetWidth || 158;
+      const startX = bw / 2 - cardW / 2; // horizontally under the slot
+      const startY = -180;               // above the board, behind the slot
+      el.style.setProperty("--drop-x", (startX - card.position.x) + "px");
+      el.style.setProperty("--drop-y", (startY - card.position.y) + "px");
+      el.classList.add("dropping");
+      setTimeout(() => el.classList.remove("dropping"), 720);
+    }
   });
   persistLibrary();
 }
