@@ -7,3 +7,11 @@ portfolio/node_modules/
 
 # Logs
 *.log
+
+# Secrets — 실제 키는 절대 커밋하지 않는다 (.env.example 만 커밋)
+.env
+.env.*
+!.env.example
+
+# Netlify
+.netlify/
